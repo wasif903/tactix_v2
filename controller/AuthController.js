@@ -468,29 +468,69 @@ const createUser = async (req, res) => {
       phone,
       BranchID: findBranch._id,
     });
-    await CreateUser.save();
 
     if (!Array.isArray(rateList)) {
       return res.status(404).json({ message: "Invalid RateList Format" });
     }
 
-    rateList.forEach((item) => {
-      const fromLocation = item?.from?.trim()?.toLowerCase();
-      const toLocation = item?.to?.trim()?.toLowerCase();
+    const errors = [];
+    const uniqueCombinations = new Set();
 
-      if (fromLocation === toLocation) {
-        return res
-          .status(400)
-          .json({ message: "From and To locations can't be the same" });
-      }
+    await Promise.all(
+      rateList.map(async (priceList) => {
+        if (
+          priceList.zipCodeRangeEnd === "" ||
+          (priceList.zipCodeRangeEnd.length >= 5 &&
+            priceList.zipCodeRangeEnd.length <= 9)
+        ) {
+          errors.push({
+            ...priceList,
+            message:
+              "Zip Code Range End is required and must be greater than 5 and less than 9",
+          });
+        }
 
-      if (item?.price <= 0) {
-        return res
-          .status(400)
-          .json({ message: "Price can't be zero or negative" });
-      }
-    });
+        if (
+          priceList.zipCodeRangeStart === "" ||
+          (priceList.zipCodeRangeStart.length >= 5 &&
+            priceList.zipCodeRangeStart.length <= 9)
+        ) {
+          errors.push({
+            ...priceList,
+            message:
+              "Zip Code Range Start is required and must be greater than 5 and less than 9",
+          });
+        }
 
+        if (priceList?.rates === 0) {
+          errors.push({ ...priceList, message: "Rates can't be zero" });
+        }
+
+        if (Number(priceList?.weight) === 0) {
+          errors.push({ ...priceList, message: "Weights can't be zero" });
+        }
+
+        const uniqueKey = `${priceList.state} / ${priceList.city}-${priceList.shipmentType}-${priceList.shipmentCategory}`;
+
+        if (uniqueCombinations.has(uniqueKey)) {
+          errors.push({
+            ...priceList,
+            message: "Duplicate city with the same shipment type and category",
+          });
+        } else {
+          uniqueCombinations.add(uniqueKey);
+        }
+      })
+    );
+
+    if (errors.length > 0) {
+      return res.status(400).json({
+        message: "Error occurred while creating Ratelist",
+        errors,
+      });
+    }
+
+    await CreateUser.save();
     const newRateList = new ratelist({
       managerID,
       branchID: BranchId,
@@ -499,28 +539,7 @@ const createUser = async (req, res) => {
     });
     await newRateList.save();
 
-    autoMailer({
-      from: "admin@tactix.asia",
-      to: CreateUser.email,
-      subject: "Welcome to our platform, TACTIX",
-      message: `
-            <h3 style="font-family: Arial, sans-serif; color: #34495e;">
-              Your account has been created by <strong>${findManager.name}</strong> and is linked to the branch: <strong>${findBranch.branch_name}</strong>
-            </h3>
-            <br/>
-            <p style="font-family: Arial, sans-serif; font-size: 16px; color: #2c3e50;">
-              <strong>Email:</strong> ${CreateUser.email}
-            </p>
-            <p style="font-family: Arial, sans-serif; font-size: 16px; color: #2c3e50;">
-              <strong>Password:</strong> ${CreateUser.password}
-            </p>
-            <br/>
-            <p style="font-family: Arial, sans-serif; font-size: 14px; color: #7f8c8d;">
-              For any queries, please contact the branch at: <strong>${findBranch.branch_contact_number}</strong>
-            </p>`,
-    });
-
-    res.status(200).json({ message: "User Created Succesfully!" });
+    res.status(200).json({ message: "User Created Successfully!" });
   } catch (error) {
     console.log(error);
     return res.status(500).json({ message: "Internal Server Error!" });
@@ -580,70 +599,172 @@ const getallRidersofGroup = async (req, res) => {
 
 const HandleUpdateUser = async (req, res) => {
   try {
-    const { managerID, branchID, userID } = req.params;
-    const { rateList, email, name, password } = req.body;
+    const { email, name, password, rateList, phone } = req.body;
+    const { branchID, userID } = req.params;
 
-    const findManager = await ManagerSchema.findById(managerID);
     const findBranch = await BranchSchema.findById(branchID);
     const findUser = await UserSchema.findById(userID);
-
-    if (!findManager || !findBranch || !findUser) {
-      return res
-        .status(404)
-        .json({ message: "User or Branch or Manager not found!" });
+    if (!findBranch) {
+      return res.status(404).json({ message: "Branch Not Found!" });
     }
+    if (!findUser) {
+      return res.status(404).json({ message: "User Not Found!" });
+    }
+
+    const existingUser =
+      (await AdminSchema.findOne({
+        $or: [{ email }, { phone }],
+        _id: { $ne: userID },
+      })) ||
+      (await RiderSchema.findOne({
+        $or: [{ email }, { phone }],
+        _id: { $ne: userID },
+      })) ||
+      (await SuperAdmin.findOne({
+        $or: [{ email }, { phone }],
+        _id: { $ne: userID },
+      })) ||
+      (await ManagerSchema.findOne({
+        $or: [{ email }, { phone }],
+        _id: { $ne: userID },
+      })) ||
+      (await UserSchema.findOne({
+        $or: [{ email }, { phone }],
+        _id: { $ne: userID },
+      }));
+
+    if (existingUser) {
+      return res
+        .status(400)
+        .json({ message: "Email or Phone Already Exists!" });
+    }
+
     if (!Array.isArray(rateList)) {
       return res.status(400).json({ message: "Invalid RateList Format" });
     }
 
-    const existingRateList = await RateListModel.findOne({
-      managerID,
-      branchID,
-      userID,
-    });
+    const errors = [];
+    const uniqueCombinations = new Set();
 
-    if (!existingRateList) {
-      return res.status(404).json({ message: "Rate List not found!" });
-    }
+    await Promise.all(
+      rateList.map(async (priceList) => {
+        const findExisting = await ratelist.findOne({
+          "rateList.countryName": priceList.countryName,
+          "rateList.city": priceList.city,
+          "rateList.state": priceList.state,
+          "rateList.zipCodeRangeStart": priceList.zipCodeRangeStart,
+          "rateList.zipCodeRangeEnd": priceList.zipCodeRangeEnd,
+          "rateList.shipmentType": { $in: priceList.shipmentType },
+          "rateList.shipmentCategory": { $in: priceList.shipmentCategory },
+        });
 
-    const mergedRateList = [...existingRateList.rateList];
+        if (findExisting) {
+          const duplicateInfo = {
+            countryName: priceList.countryName,
+            city: priceList.city,
+            state: priceList.state,
+            zipCodeRangeStart: priceList.zipCodeRangeStart,
+            zipCodeRangeEnd: priceList.zipCodeRangeEnd,
+            shipmentType: priceList.shipmentType.join(", "),
+            shipmentCategory: priceList.shipmentCategory.join(", "),
+          };
 
-    rateList.forEach((item) => {
-      const fromLocation = item?.from?.trim()?.toLowerCase();
-      const toLocation = item?.to?.trim()?.toLowerCase();
+          errors.push({
+            ...duplicateInfo,
+            message: "Duplicate Entry Exists for this RateList.",
+          });
+        }
 
-      if (fromLocation === toLocation) {
-        return res
-          .status(400)
-          .json({ message: "From and To locations can't be the same" });
-      }
+        if (priceList?.rates === 0) {
+          errors.push({ ...priceList, message: "Rates can't be zero" });
+        }
 
-      if (item?.price <= 0) {
-        return res
-          .status(400)
-          .json({ message: "Price can't be zero or negative" });
-      }
+        if (Number(priceList?.weight) === 0) {
+          errors.push({ ...priceList, message: "Weights can't be zero" });
+        }
 
-      const exists = mergedRateList.some((rate) => {
-        const existingFrom = rate.from.trim().toLowerCase();
-        const existingTo = rate.to.trim().toLowerCase();
-        return existingFrom === fromLocation && existingTo === toLocation;
+        const uniqueKey = `${priceList.countryName}-${priceList.city} / ${
+          priceList.state
+        }-${priceList.zipCodeRangeStart}-${
+          priceList.zipCodeRangeEnd
+        }-${priceList.shipmentType.join(
+          ", "
+        )}-${priceList.shipmentCategory.join(", ")}`;
+
+        if (uniqueCombinations.has(uniqueKey)) {
+          errors.push({
+            ...priceList,
+            message: "Duplicate city with the same shipment type and category",
+          });
+        } else {
+          uniqueCombinations.add(uniqueKey);
+        }
+      })
+    );
+
+    if (errors.length > 0) {
+      return res.status(400).json({
+        message: "Error occurred while updating Ratelist",
+        errors,
       });
-
-      if (!exists) {
-        mergedRateList.push(item);
-      }
-    });
+    }
 
     findUser.email = email || findUser.email;
     findUser.name = name || findUser.name;
     findUser.password = password || findUser.password;
-    existingRateList.rateList = mergedRateList;
-    await existingRateList.save();
+    findUser.phone = phone || findUser.phone;
+
+    const currentRateList = await ratelist.findOne({ userID: userID });
+
+    if (currentRateList) {
+      const updatedRateList = [...currentRateList.rateList];
+
+      rateList.forEach((newRate) => {
+        const existingRateIndex = updatedRateList.findIndex(
+          (existingRate) =>
+            existingRate.countryName === newRate.countryName &&
+            existingRate.state === newRate.state &&
+            existingRate.city === newRate.city &&
+            existingRate.zipCodeRangeEnd === newRate.zipCodeRangeEnd &&
+            existingRate.shipmentType.toString() ===
+              newRate.shipmentType.toString() &&
+            existingRate.shipmentCategory.toString() ===
+              newRate.shipmentCategory.toString()
+        );
+
+        if (existingRateIndex === -1) {
+          updatedRateList.push(newRate);
+        } else {
+          updatedRateList[existingRateIndex] = {
+            ...updatedRateList[existingRateIndex],
+            ...newRate,
+          };
+        }
+      });
+
+      await ratelist.findOneAndUpdate(
+        { userID: userID },
+        { rateList: updatedRateList },
+        { new: true }
+      );
+    } else {
+      return res.status(400).json({
+        message: "RateList does not exist for this user. Unable to update.",
+      });
+    }
+
+    await findUser.save();
+
+    const userResponse = {
+      email: findUser.email,
+      name: findUser.name,
+      phone: findUser.phone,
+      branch: findBranch.name,
+    };
 
     res.status(200).json({
-      message: "Rate List Updated Successfully!",
-      updatedRateList: existingRateList,
+      message: "User and Ratelist Updated Successfully!",
+      user: userResponse,
     });
   } catch (error) {
     console.log(error);
@@ -858,7 +979,6 @@ const HandleUpdateRole = async (req, res) => {
 const HandleUploadBulkRateList = async (req, res) => {
   try {
     const { rateListID } = req.params;
-
     const file = req.files?.file;
 
     if (!file) {
@@ -871,11 +991,9 @@ const HandleUploadBulkRateList = async (req, res) => {
     });
 
     const uploadUrl = uploadResult.secure_url;
-
     const dataArray = [];
     const invalidDataArray = [];
 
-    // Make a request to the URL using fetch
     const response = await fetch(uploadUrl);
     if (!response.ok) {
       throw new Error(`Failed to fetch data: ${response.statusText}`);
@@ -900,38 +1018,100 @@ const HandleUploadBulkRateList = async (req, res) => {
       })
       .on("data", async function (rowData) {
         const hasAllRequiredFields =
-          rowData.to &&
-          rowData.from &&
-          rowData.price &&
-          (rowData.shipmentType === "Premium" ||
-            rowData.shipmentType === "Express" ||
-            rowData.shipmentType === "Economy" ||
-            rowData.shipmentType === "Others ");
+          rowData.countryName &&
+          rowData.city &&
+          rowData.state &&
+          rowData.zipCodeRangeStart &&
+          rowData.zipCodeRangeEnd &&
+          rowData.shipmentType &&
+          rowData.rates &&
+          rowData.weight &&
+          rowData.shipmentCategory &&
+          ["SpeedyShip", "SteadyShip", "Postal Economy", "CustomShip"].includes(
+            rowData.shipmentType
+          ) &&
+          ["Collection", "Mid-Mile", "Customs Clearance", "Delivery"].includes(
+            rowData.shipmentCategory
+          );
 
         if (hasAllRequiredFields) {
-          const modifiedData = {
-            _id: new mongoose.Types.ObjectId(),
-            to: String(rowData.to),
-            from: String(rowData.from),
-            price: Number(rowData.price),
-            shipmentType: String(rowData.shipmentType),
-          };
-          dataArray.push(modifiedData);
+          // Check for duplicate entry in the database
+          const existingEntry = await ratelist.findOne({
+            "rateList.countryName": rowData.countryName,
+            "rateList.state": rowData.state,
+            "rateList.city": rowData.city,
+            "rateList.shipmentType": rowData.shipmentType,
+            "rateList.shipmentCategory": rowData.shipmentCategory,
+          });
+
+          if (existingEntry) {
+            // Add to invalidDataArray if a duplicate is found
+            invalidDataArray.push({
+              rowData,
+              errors: [{ message: "Duplicate entry for this RateList." }],
+            });
+          } else {
+            const modifiedData = {
+              _id: new mongoose.Types.ObjectId(),
+              countryName: String(rowData.countryName),
+              city: String(rowData.city),
+              state: String(rowData.state),
+              zipCodeRangeStart: String(rowData.zipCodeRangeStart),
+              zipCodeRangeEnd: String(rowData.zipCodeRangeEnd),
+              shipmentType: String(rowData.shipmentType),
+              rates: Number(rowData.rates),
+              weight: Number(rowData.weight),
+              shipmentCategory: String(rowData.shipmentCategory),
+            };
+            dataArray.push(modifiedData);
+          }
         } else {
+          // Handle missing fields or invalid data
           invalidDataArray.push({
             rowData,
-            missingFields: {
-              to: !rowData.to ? "to field is required" : null,
-              from: !rowData.from ? "from field is required" : null,
-              price: !rowData.price ? "price field is required" : null,
-              shipmentType: !rowData.shipmentType
-                ? "shipmentType field is required"
-                : !["Premium", "Express", "Economy", "Others"].includes(
-                    rowData.shipmentType
-                  )
-                ? "Invalid Shipment Type"
-                : null,
-            },
+            errors: [
+              {
+                message: !rowData.countryName
+                  ? "countryName field is required"
+                  : null,
+              },
+              { message: !rowData.city ? "city field is required" : null },
+              { message: !rowData.state ? "state field is required" : null },
+              {
+                message: !rowData.zipCodeRangeStart
+                  ? "zipCodeRangeStart field is required"
+                  : null,
+              },
+              {
+                message: !rowData.zipCodeRangeEnd
+                  ? "zipCodeRangeEnd field is required"
+                  : null,
+              },
+              {
+                message: !rowData.shipmentType
+                  ? "shipmentType field is required"
+                  : ![
+                      "SpeedyShip",
+                      "SteadyShip",
+                      "Postal Economy",
+                      "CustomShip",
+                    ].includes(rowData.shipmentType)
+                  ? "Invalid Shipment Type"
+                  : null,
+              },
+              {
+                message: !rowData.shipmentCategory
+                  ? "shipmentCategory field is required"
+                  : ![
+                      "Collection",
+                      "Mid-Mile",
+                      "Customs Clearance",
+                      "Delivery",
+                    ].includes(rowData.shipmentCategory)
+                  ? "Invalid shipmentCategory"
+                  : null,
+              },
+            ],
           });
         }
       })
