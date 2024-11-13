@@ -480,7 +480,7 @@ const createUser = async (req, res) => {
       rateList.map(async (priceList) => {
         if (
           priceList.zipCodeRangeEnd === "" ||
-          (priceList.zipCodeRangeEnd.length >= 5 &&
+          !(priceList.zipCodeRangeEnd.length >= 5 &&
             priceList.zipCodeRangeEnd.length <= 9)
         ) {
           errors.push({
@@ -492,7 +492,7 @@ const createUser = async (req, res) => {
 
         if (
           priceList.zipCodeRangeStart === "" ||
-          (priceList.zipCodeRangeStart.length >= 5 &&
+          !(priceList.zipCodeRangeStart.length >= 5 &&
             priceList.zipCodeRangeStart.length <= 9)
         ) {
           errors.push({
@@ -975,7 +975,6 @@ const HandleUpdateRole = async (req, res) => {
   }
 };
 
-// Bulk Upload RateList API
 const HandleUploadBulkRateList = async (req, res) => {
   try {
     const { rateListID } = req.params;
@@ -1368,6 +1367,7 @@ const HandleCreateBulkRateListUpdateUser = async (req, res) => {
     res.status(500).json({ message: "Internal Server Error" });
   }
 };
+
 
 export {
   CreateSupperAdmin,

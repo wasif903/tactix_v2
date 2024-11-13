@@ -18,7 +18,7 @@ const parcelSchema = new Schema(
       ref: "ratelist",
       required: true,
     },
-    parcelName: {
+    parcelDescription: {
       type: String,
       required: true,
     },
@@ -69,7 +69,7 @@ const parcelSchema = new Schema(
         type: Number,
       },
     },
-    
+
     receiverName: {
       type: String,
       required: true,
