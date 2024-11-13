@@ -42,7 +42,6 @@ const CreateParcel = async (req, res) => {
       hsCode,
     } = req.body;
 
-    // Validate User and Branch existence
     const findUser = await UserSchema.findById(userId);
     const findBranch = await BranchSchema.findById(BranchId);
 
@@ -50,8 +49,8 @@ const CreateParcel = async (req, res) => {
       branchID: findBranch._id,
     });
 
-    const findRateList = await ratelist.findOne({ "rateList._id": rateListID });
-
+    let findRateList = await ratelist.findOne({ "rateList._id": rateListID });
+    
     if (!findUser) {
       return res.status(404).json({ message: "User Not Found!" });
     }
@@ -91,13 +90,48 @@ const CreateParcel = async (req, res) => {
         Number(Dimension?.length)) /
       5000;
 
+    const filteredRateList = findRateList
+      ? findRateList.rateList.filter(
+          (rate) => rate._id.toString() === item.parcelID.rateListID.toString()
+        )
+      : [];
+
     let netWeight;
 
     if (Number(weight) < volumetricWeight) {
+       findRateList = await ratelist.findOne({
+        "rateList.weight": volumetricWeight,
+        "rateList.shipmentType": filteredRateList[0].shipmentType,
+        "rateList.shipmentCategory": filteredRateList[0].shipmentCategory,
+        "rateList.countryName": filteredRateList[0].countryName,
+        "rateList.state": filteredRateList[0].state,
+        "rateList.city": filteredRateList[0].city,
+      });
+
+      if (!findRateList) {
+        findRateList = await ratelist
+          .findOne({
+            "rateList.shipmentType": filteredRateList[0].shipmentType,
+            "rateList.shipmentCategory": filteredRateList[0].shipmentCategory,
+            "rateList.countryName": filteredRateList[0].countryName,
+            "rateList.state": filteredRateList[0].state,
+            "rateList.city": filteredRateList[0].city,
+            "rateList.weight": { $gte: volumetricWeight },
+          })
+          .sort({ "rateList.weight": 1 });
+      }
+
+      if (!findRateList) {
+        return res.status(400).json({
+          message: "No rate found close to the volumetric weight.",
+        });
+      }
+
       netWeight = volumetricWeight;
     } else {
       netWeight = Number(weight);
     }
+
     if (!netWeight || netWeight === undefined || netWeight === 0) {
       return res.status(400).json({
         message: "Invalid Weight value",
@@ -121,7 +155,7 @@ const CreateParcel = async (req, res) => {
     const createParcel = new parcelSchema({
       userId,
       branchID: BranchId,
-      rateListID: rateListID,
+      rateListID: findRateList._id,
       parcelDescription,
       CodAmount,
       weight: netWeight,
@@ -537,93 +571,105 @@ const HandleBulkParcelCreate = async (req, res) => {
 };
 
 const HandleAssignParcels = async (req, res) => {
-  // try {
-  //   const { branchID, riderGroupID } = req.params;
-  //   const { assignedFromManager, customerID, parcelID } = req.body;
-  //   const findBranch = await BranchSchema.findById(branchID);
-  //   if (!findBranch) {
-  //     return res.status(404).json({ message: "Branch not found!" });
-  //   }
-  //   const findRiderGroup = await RidersGroupSchema.findById(riderGroupID);
-  //   if (!findRiderGroup) {
-  //     return res.status(404).json({ message: "Driver Crew not found!" });
-  //   }
-  //   const findDrivers = await RiderSchema.find({
-  //     RiderGroup: findRiderGroup._id,
-  //   });
-  //   if (findDrivers.length === 0) {
-  //     return res.status(400).json({ message: "No drivers available!" });
-  //   }
-  //   const findManager = await ManagerSchema.findById(assignedFromManager);
-  //   if (!findManager) {
-  //     return res.status(404).json({ message: "Manager not found!" });
-  //   }
-  //   const findUser = await UserSchema.findById(customerID);
-  //   if (!findUser) {
-  //     return res.status(404).json({ message: "User not found!" });
-  //   }
-  //   const findParcel = await parcelSchema.findById(parcelID);
-  //   const findRateList = await ratelist.findOne({
-  //     "rateList._id": findParcel.rateListID,
-  //   });
-  //   const filteredRateList = findRateList.rateList.filter(
-  //     (rateID) => rateID._id.toString() === findParcel.rateListID.toString()
-  //   );
-  //   const data = {
-  //     ...findParcel.toObject(),
-  //     rateList: !findParcel.CodAmount
-  //       ? Number(filteredRateList[0].price * findParcel.weight)
-  //       : Number(
-  //           filteredRateList[0].price * findParcel.weight +
-  //             findParcel.CodCharges
-  //         ),
-  //   };
-  //   if (!findParcel) {
-  //     return res.status(404).json({ message: "Parcel not found!" });
-  //   }
-  //   const createAssignment = new Assignment({
-  //     branchID,
-  //     riderGroupID,
-  //     customerID,
-  //     assignedFromManager,
-  //     parcelID,
-  //     totalPrice: data.rateList,
-  //   });
-  //   await createAssignment.save();
-  //   await parcelSchema.findByIdAndUpdate(
-  //     parcelID,
-  //     { $set: { status: "Order Received" } },
-  //     { new: true }
-  //   );
-  //   autoMailer({
-  //     from: "admin@tactix.asia",
-  //     to: `${findUser.email}`,
-  //     subject: "Welcome to our platform, TACTIX",
-  //     message: `
-  //       <h3 style="font-family: Arial, sans-serif; color: #34495e;">
-  //         Your Order Has Been Received Successfully <strong>${
-  //           findManager.name
-  //         }</strong> and is linked to the branch: <strong>${
-  //       findBranch.branch_name
-  //     }</strong>
-  //       </h3>
-  //       <h4> Now You Can Start Tracking Your Order With This ID On Our HOme Page ${
-  //         findParcel.haveOwnTrackID ? findParcel.ownTrackID : findParcel._id
-  //       }</h4>
-  //       <br/>
-  //       <p style="font-family: Arial, sans-serif; font-size: 14px; color: #7f8c8d;">
-  //         For any queries, please contact the branch at: <strong>${
-  //           findBranch.branch_contact_number
-  //         }</strong>
-  //       </p>`,
-  //   });
-  //   res.status(200).json({
-  //     message: `Parcel Has Been Assigned To : ${findRiderGroup.groupname} By The Manager ${findManager.name}`,
-  //   });
-  // } catch (error) {
-  //   console.log(error);
-  //   res.status(500).json({ message: "Internal Server Error!" });
-  // }
+  try {
+    const { branchID, riderGroupID } = req.params;
+    const { assignedFromManager, customerID, parcelID } = req.body;
+    const findBranch = await BranchSchema.findById(branchID);
+    if (!findBranch) {
+      return res.status(404).json({ message: "Branch not found!" });
+    }
+    const findRiderGroup = await RidersGroupSchema.findById(riderGroupID);
+    if (!findRiderGroup) {
+      return res.status(404).json({ message: "Driver Crew not found!" });
+    }
+    const findDrivers = await RiderSchema.find({
+      RiderGroup: findRiderGroup._id,
+    });
+    if (findDrivers.length === 0) {
+      return res.status(400).json({ message: "No drivers available!" });
+    }
+    const findManager = await ManagerSchema.findById(assignedFromManager);
+    if (!findManager) {
+      return res.status(404).json({ message: "Manager not found!" });
+    }
+    const findUser = await UserSchema.findById(customerID);
+    if (!findUser) {
+      return res.status(404).json({ message: "User not found!" });
+    }
+    const findParcel = await parcelSchema.findById(parcelID);
+    const findRateList = await ratelist.findOne({
+      "rateList._id": findParcel.rateListID,
+    });
+    const filteredRateList = findRateList.rateList.filter(
+      (rateID) => rateID._id.toString() === findParcel.rateListID.toString()
+    );
+
+    const volumetricWeight =
+      Number(findParcel.Dimension.length) *
+      Number(findParcel.Dimension.width) *
+      Number(findParcel.Dimension.height);
+
+    // let originRate;
+    // let totalAmount;
+    // if (volumetricWeight < filteredRateList[0].weight) {
+
+    // }
+
+    const data = {
+      ...findParcel.toObject(),
+      rateList: !findParcel.CodAmount
+        ? Number(filteredRateList[0].rates * findParcel.weight)
+        : Number(
+            filteredRateList[0].price * findParcel.weight +
+              findParcel.CodCharges
+          ),
+    };
+    if (!findParcel) {
+      return res.status(404).json({ message: "Parcel not found!" });
+    }
+    const createAssignment = new Assignment({
+      branchID,
+      riderGroupID,
+      customerID,
+      assignedFromManager,
+      parcelID,
+      totalPrice: data.rateList,
+    });
+    await createAssignment.save();
+    await parcelSchema.findByIdAndUpdate(
+      parcelID,
+      { $set: { status: "Order Received" } },
+      { new: true }
+    );
+    autoMailer({
+      from: "admin@tactix.asia",
+      to: `${findUser.email}`,
+      subject: "Welcome to our platform, TACTIX",
+      message: `
+        <h3 style="font-family: Arial, sans-serif; color: #34495e;">
+          Your Order Has Been Received Successfully <strong>${
+            findManager.name
+          }</strong> and is linked to the branch: <strong>${
+        findBranch.branch_name
+      }</strong>
+        </h3>
+        <h4> Now You Can Start Tracking Your Order With This ID On Our HOme Page ${
+          findParcel.haveOwnTrackID ? findParcel.ownTrackID : findParcel._id
+        }</h4>
+        <br/>
+        <p style="font-family: Arial, sans-serif; font-size: 14px; color: #7f8c8d;">
+          For any queries, please contact the branch at: <strong>${
+            findBranch.branch_contact_number
+          }</strong>
+        </p>`,
+    });
+    res.status(200).json({
+      message: `Parcel Has Been Assigned To : ${findRiderGroup.groupname} By The Manager ${findManager.name}`,
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Internal Server Error!" });
+  }
 };
 
 const HandleGetParcels = async (req, res) => {

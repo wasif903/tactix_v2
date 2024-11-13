@@ -480,8 +480,10 @@ const createUser = async (req, res) => {
       rateList.map(async (priceList) => {
         if (
           priceList.zipCodeRangeEnd === "" ||
-          !(priceList.zipCodeRangeEnd.length >= 5 &&
-            priceList.zipCodeRangeEnd.length <= 9)
+          !(
+            priceList.zipCodeRangeEnd.length >= 5 &&
+            priceList.zipCodeRangeEnd.length <= 9
+          )
         ) {
           errors.push({
             ...priceList,
@@ -492,8 +494,10 @@ const createUser = async (req, res) => {
 
         if (
           priceList.zipCodeRangeStart === "" ||
-          !(priceList.zipCodeRangeStart.length >= 5 &&
-            priceList.zipCodeRangeStart.length <= 9)
+          !(
+            priceList.zipCodeRangeStart.length >= 5 &&
+            priceList.zipCodeRangeStart.length <= 9
+          )
         ) {
           errors.push({
             ...priceList,
@@ -1136,10 +1140,9 @@ const HandleUploadBulkRateList = async (req, res) => {
 
 const HandleCreateBulkRateList = async (req, res) => {
   try {
-    const file = req.files?.file;
-
     const { branchID } = req.params;
 
+    const file = req.files?.file;
     const findBranch = await BranchSchema.findById(branchID);
     if (!findBranch) {
       return res.status(401).json({ message: "Invalid Request" });
@@ -1184,38 +1187,85 @@ const HandleCreateBulkRateList = async (req, res) => {
       })
       .on("data", async function (rowData) {
         const hasAllRequiredFields =
-          rowData.to &&
-          rowData.from &&
-          rowData.price &&
-          (rowData.shipmentType === "Premium" ||
-            rowData.shipmentType === "Express" ||
-            rowData.shipmentType === "Economy" ||
-            rowData.shipmentType === "Others ");
+          rowData.countryName &&
+          rowData.city &&
+          rowData.state &&
+          rowData.zipCodeRangeStart &&
+          rowData.zipCodeRangeEnd &&
+          rowData.shipmentType &&
+          rowData.rates &&
+          rowData.weight &&
+          rowData.shipmentCategory &&
+          ["SpeedyShip", "SteadyShip", "Postal Economy", "CustomShip"].includes(
+            rowData.shipmentType
+          ) &&
+          ["Collection", "Mid-Mile", "Customs Clearance", "Delivery"].includes(
+            rowData.shipmentCategory
+          );
 
         if (hasAllRequiredFields) {
+        
           const modifiedData = {
             _id: new mongoose.Types.ObjectId(),
-            to: String(rowData.to),
-            from: String(rowData.from),
-            price: Number(rowData.price),
+            countryName: String(rowData.countryName),
+            city: String(rowData.city),
+            state: String(rowData.state),
+            zipCodeRangeStart: String(rowData.zipCodeRangeStart),
+            zipCodeRangeEnd: String(rowData.zipCodeRangeEnd),
             shipmentType: String(rowData.shipmentType),
+            rates: Number(rowData.rates),
+            weight: Number(rowData.weight),
+            shipmentCategory: String(rowData.shipmentCategory),
           };
           dataArray.push(modifiedData);
+
         } else {
+          // Handle missing fields or invalid data
           invalidDataArray.push({
             rowData,
-            missingFields: {
-              to: !rowData.to ? "to field is required" : null,
-              from: !rowData.from ? "from field is required" : null,
-              price: !rowData.price ? "price field is required" : null,
-              shipmentType: !rowData.shipmentType
-                ? "shipmentType field is required"
-                : !["Premium", "Express", "Economy", "Others"].includes(
-                    rowData.shipmentType
-                  )
-                ? "Invalid Shipment Type"
-                : null,
-            },
+            errors: [
+              {
+                message: !rowData.countryName
+                  ? "countryName field is required"
+                  : null,
+              },
+              { message: !rowData.city ? "city field is required" : null },
+              { message: !rowData.state ? "state field is required" : null },
+              {
+                message: !rowData.zipCodeRangeStart
+                  ? "zipCodeRangeStart field is required"
+                  : null,
+              },
+              {
+                message: !rowData.zipCodeRangeEnd
+                  ? "zipCodeRangeEnd field is required"
+                  : null,
+              },
+              {
+                message: !rowData.shipmentType
+                  ? "shipmentType field is required"
+                  : ![
+                      "SpeedyShip",
+                      "SteadyShip",
+                      "Postal Economy",
+                      "CustomShip",
+                    ].includes(rowData.shipmentType)
+                  ? "Invalid Shipment Type"
+                  : null,
+              },
+              {
+                message: !rowData.shipmentCategory
+                  ? "shipmentCategory field is required"
+                  : ![
+                      "Collection",
+                      "Mid-Mile",
+                      "Customs Clearance",
+                      "Delivery",
+                    ].includes(rowData.shipmentCategory)
+                  ? "Invalid shipmentCategory"
+                  : null,
+              },
+            ],
           });
         }
       })
@@ -1367,7 +1417,6 @@ const HandleCreateBulkRateListUpdateUser = async (req, res) => {
     res.status(500).json({ message: "Internal Server Error" });
   }
 };
-
 
 export {
   CreateSupperAdmin,
