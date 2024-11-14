@@ -50,7 +50,7 @@ const CreateParcel = async (req, res) => {
     });
 
     let findRateList = await ratelist.findOne({ "rateList._id": rateListID });
-    
+
     if (!findUser) {
       return res.status(404).json({ message: "User Not Found!" });
     }
@@ -92,14 +92,14 @@ const CreateParcel = async (req, res) => {
 
     const filteredRateList = findRateList
       ? findRateList.rateList.filter(
-          (rate) => rate._id.toString() === item.parcelID.rateListID.toString()
+          (rate) => rate._id.toString() === rateListID.toString()
         )
       : [];
 
     let netWeight;
 
     if (Number(weight) < volumetricWeight) {
-       findRateList = await ratelist.findOne({
+      findRateList = await ratelist.findOne({
         "rateList.weight": volumetricWeight,
         "rateList.shipmentType": filteredRateList[0].shipmentType,
         "rateList.shipmentCategory": filteredRateList[0].shipmentCategory,
@@ -132,6 +132,17 @@ const CreateParcel = async (req, res) => {
       netWeight = Number(weight);
     }
 
+    const extractId = findRateList.rateList.find((rate) => 
+      rate.shipmentType === filteredRateList[0].shipmentType &&
+      rate.shipmentCategory === filteredRateList[0].shipmentCategory &&
+      rate.countryName === filteredRateList[0].countryName &&
+      rate.state === filteredRateList[0].state &&
+      rate.city === filteredRateList[0].city &&
+      rate.weight >= volumetricWeight 
+    )
+
+    console.log(extractId);
+
     if (!netWeight || netWeight === undefined || netWeight === 0) {
       return res.status(400).json({
         message: "Invalid Weight value",
@@ -155,7 +166,7 @@ const CreateParcel = async (req, res) => {
     const createParcel = new parcelSchema({
       userId,
       branchID: BranchId,
-      rateListID: findRateList._id,
+      rateListID: extractId._id,
       parcelDescription,
       CodAmount,
       weight: netWeight,
@@ -571,100 +582,246 @@ const HandleBulkParcelCreate = async (req, res) => {
 };
 
 const HandleAssignParcels = async (req, res) => {
+  // try {
+  //   const { branchID, riderGroupID } = req.params;
+  //   const { assignedFromManager, customerID, parcelID } = req.body;
+  //   const findBranch = await BranchSchema.findById(branchID);
+  //   if (!findBranch) {
+  //     return res.status(404).json({ message: "Branch not found!" });
+  //   }
+  //   const findRiderGroup = await RidersGroupSchema.findById(riderGroupID);
+  //   if (!findRiderGroup) {
+  //     return res.status(404).json({ message: "Driver Crew not found!" });
+  //   }
+  //   const findDrivers = await RiderSchema.find({
+  //     RiderGroup: findRiderGroup._id,
+  //   });
+  //   if (findDrivers.length === 0) {
+  //     return res.status(400).json({ message: "No drivers available!" });
+  //   }
+  //   const findManager = await ManagerSchema.findById(assignedFromManager);
+  //   if (!findManager) {
+  //     return res.status(404).json({ message: "Manager not found!" });
+  //   }
+  //   const findUser = await UserSchema.findById(customerID);
+  //   if (!findUser) {
+  //     return res.status(404).json({ message: "User not found!" });
+  //   }
+  //   const findParcel = await parcelSchema.findById(parcelID);
+  //   const findRateList = await ratelist.findOne({
+  //     "rateList._id": findParcel.rateListID,
+  //   });
+  //   const filteredRateList = findRateList.rateList.filter(
+  //     (rateID) => rateID._id.toString() === findParcel.rateListID.toString()
+  //   );
+  //   const volumetricWeight =
+  //     (Number(findParcel.Dimension.length) *
+  //       Number(findParcel.Dimension.width) *
+  //       Number(findParcel.Dimension.height)) /
+  //     5000;
+  //   // let originRate;
+  //   // let totalAmount;
+  //   // if (volumetricWeight < filteredRateList[0].weight) {
+  //   // }
+  //   const data = {
+  //     ...findParcel.toObject(),
+  //     rateList: !findParcel.CodAmount
+  //       ? Number(filteredRateList[0].rates * findParcel.weight)
+  //       : Number(
+  //           filteredRateList[0].price * findParcel.weight +
+  //             findParcel.CodCharges
+  //         ),
+  //   };
+  //   if (!findParcel) {
+  //     return res.status(404).json({ message: "Parcel not found!" });
+  //   }
+  //   const createAssignment = new Assignment({
+  //     branchID,
+  //     riderGroupID,
+  //     customerID,
+  //     assignedFromManager,
+  //     parcelID,
+  //     totalPrice: data.rateList,
+  //   });
+  //   await createAssignment.save();
+  //   await parcelSchema.findByIdAndUpdate(
+  //     parcelID,
+  //     { $set: { status: "Order Received" } },
+  //     { new: true }
+  //   );
+  //   autoMailer({
+  //     from: "admin@tactix.asia",
+  //     to: `${findUser.email}`,
+  //     subject: "Welcome to our platform, TACTIX",
+  //     message: `
+  //       <h3 style="font-family: Arial, sans-serif; color: #34495e;">
+  //         Your Order Has Been Received Successfully <strong>${
+  //           findManager.name
+  //         }</strong> and is linked to the branch: <strong>${
+  //       findBranch.branch_name
+  //     }</strong>
+  //       </h3>
+  //       <h4> Now You Can Start Tracking Your Order With This ID On Our HOme Page ${
+  //         findParcel.haveOwnTrackID ? findParcel.ownTrackID : findParcel._id
+  //       }</h4>
+  //       <br/>
+  //       <p style="font-family: Arial, sans-serif; font-size: 14px; color: #7f8c8d;">
+  //         For any queries, please contact the branch at: <strong>${
+  //           findBranch.branch_contact_number
+  //         }</strong>
+  //       </p>`,
+  //   });
+  //   res.status(200).json({
+  //     message: `Parcel Has Been Assigned To : ${findRiderGroup.groupname} By The Manager ${findManager.name}`,
+  //   });
+  // } catch (error) {
+  //   console.log(error);
+  //   res.status(500).json({ message: "Internal Server Error!" });
+  // }
+};
+
+const HandleGetParcels = async (req, res) => {
   try {
-    const { branchID, riderGroupID } = req.params;
-    const { assignedFromManager, customerID, parcelID } = req.body;
-    const findBranch = await BranchSchema.findById(branchID);
-    if (!findBranch) {
-      return res.status(404).json({ message: "Branch not found!" });
-    }
-    const findRiderGroup = await RidersGroupSchema.findById(riderGroupID);
-    if (!findRiderGroup) {
-      return res.status(404).json({ message: "Driver Crew not found!" });
-    }
-    const findDrivers = await RiderSchema.find({
-      RiderGroup: findRiderGroup._id,
-    });
-    if (findDrivers.length === 0) {
-      return res.status(400).json({ message: "No drivers available!" });
-    }
-    const findManager = await ManagerSchema.findById(assignedFromManager);
-    if (!findManager) {
-      return res.status(404).json({ message: "Manager not found!" });
-    }
-    const findUser = await UserSchema.findById(customerID);
+    const { id } = req.params;
+    const findUser =
+      (await ManagerSchema.findById(id)) ||
+      (await AdminSchema.findById(id)) ||
+      (await SuperAdmin.findById(id));
     if (!findUser) {
       return res.status(404).json({ message: "User not found!" });
     }
+    if (findUser.role.includes("Manager")) {
+      const findManager = await ManagerSchema.findOne({ _id: id });
+      if (!findManager) {
+        return res.status(404).json({ message: "Manager Not Found" });
+      }
+      const findBranch = await BranchSchema.findOne({
+        _id: findManager.branchID,
+      });
+      if (!findBranch) {
+        return res.status(404).json({ message: "Branch Not Found" });
+      }
+      const findParcels = await parcelSchema.find({ branchID: findBranch._id });
+      const includeRatelist = findParcels.map(async (item) => {
+        const findRateList = await ratelist.findOne({
+          "rateList._id": item.rateListID,
+        });
+
+        console.log(item.rateListID);
+        console.log(findRateList);
+
+        const filteredRateList = findRateList.rateList.filter(
+          (rateID) => rateID._id.toString() === item.rateListID.toString()
+        );
+        const findAssignment = await Assignment.findOne({
+          parcelID: item._id,
+        }).populate({
+          path: "customerID",
+          model: "users",
+          select: "_id name email phone",
+        });
+        return {
+          ...item.toObject(),
+          rateList: filteredRateList[0] || null,
+          assignment: findAssignment,
+        };
+      });
+      const resolved = await Promise.all(includeRatelist);
+      return res.status(200).json({ parcels: resolved });
+    } else if (findUser.role.includes("SuperAdmin")) {
+      const findParcels = await parcelSchema.find();
+      const includeRatelist = findParcels.map(async (item) => {
+        const findRateList = await ratelist.findOne({
+          "rateList._id": item.rateListID,
+        });
+        const filteredRateList = findRateList.rateList.filter(
+          (rateID) => rateID._id.toString() === item.rateListID.toString()
+        );
+        const findAssignment = await Assignment.findOne({ parcelID: item._id })
+          .populate({
+            path: "parcelID",
+            model: "parcel",
+            select:
+              "Status status _id ownTrackID parcelDescription rateListID reciverAddress SenderAddress CodCharges CodAmount haveOwnTrackID weight",
+          })
+          .populate({
+            path: "customerID",
+            model: "users",
+            select: "",
+          });
+        return {
+          ...item.toObject(),
+          rateList: filteredRateList[0],
+          assignment: findAssignment,
+        };
+      });
+      const resolved = await Promise.all(includeRatelist);
+      return res.status(200).json({ parcels: resolved });
+    } else if (findUser.role.includes("Admin")) {
+      const findBranch = await BranchSchema.find({ AdminsId: { $in: id } });
+      if (!findBranch || findBranch.length === 0) {
+        return res.status(404).json({ message: "Branch Not Found" });
+      }
+      const branchIDs = findBranch.map((branch) => branch._id);
+      const findParcels = await parcelSchema.find({
+        branchID: { $in: branchIDs },
+      });
+      const includeRatelist = findParcels.map(async (item) => {
+        const findRateList = await ratelist.findOne({
+          "rateList._id": item.rateListID,
+        });
+        const filteredRateList = findRateList
+          ? findRateList.rateList.filter(
+              (rateID) => rateID._id.toString() === item.rateListID.toString()
+            )
+          : [];
+        const findAssignment = await Assignment.findOne({ parcelID: item._id });
+        return {
+          ...item.toObject(),
+          rateList: filteredRateList[0] || null,
+          assignment: findAssignment || null,
+        };
+      });
+      const resolved = await Promise.all(includeRatelist);
+      return res.status(200).json({ parcels: resolved });
+    }
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Internal Server Error!" });
+  }
+};
+
+const HandleGetSingleParcels = async (req, res) => {
+  try {
+    const { parcelID } = req.params;
     const findParcel = await parcelSchema.findById(parcelID);
+    const findAssignment = await Assignment.findOne({ parcelID: parcelID })
+      .populate({
+        path: "parcelID",
+        model: "parcel",
+        select:
+          "Status _id ownTrackID parcelDescription rateListID reciverAddress SenderAddress hsCode",
+      })
+      .populate({
+        path: "customerID",
+        model: "users",
+        select: "_id name email phone",
+      });
+    if (!findParcel) {
+      return res.status(404).json({ message: "Parcel not found!" });
+    }
     const findRateList = await ratelist.findOne({
       "rateList._id": findParcel.rateListID,
     });
     const filteredRateList = findRateList.rateList.filter(
       (rateID) => rateID._id.toString() === findParcel.rateListID.toString()
     );
-
-    const volumetricWeight =
-      Number(findParcel.Dimension.length) *
-      Number(findParcel.Dimension.width) *
-      Number(findParcel.Dimension.height);
-
-    // let originRate;
-    // let totalAmount;
-    // if (volumetricWeight < filteredRateList[0].weight) {
-
-    // }
-
-    const data = {
-      ...findParcel.toObject(),
-      rateList: !findParcel.CodAmount
-        ? Number(filteredRateList[0].rates * findParcel.weight)
-        : Number(
-            filteredRateList[0].price * findParcel.weight +
-              findParcel.CodCharges
-          ),
-    };
-    if (!findParcel) {
-      return res.status(404).json({ message: "Parcel not found!" });
-    }
-    const createAssignment = new Assignment({
-      branchID,
-      riderGroupID,
-      customerID,
-      assignedFromManager,
-      parcelID,
-      totalPrice: data.rateList,
-    });
-    await createAssignment.save();
-    await parcelSchema.findByIdAndUpdate(
-      parcelID,
-      { $set: { status: "Order Received" } },
-      { new: true }
-    );
-    autoMailer({
-      from: "admin@tactix.asia",
-      to: `${findUser.email}`,
-      subject: "Welcome to our platform, TACTIX",
-      message: `
-        <h3 style="font-family: Arial, sans-serif; color: #34495e;">
-          Your Order Has Been Received Successfully <strong>${
-            findManager.name
-          }</strong> and is linked to the branch: <strong>${
-        findBranch.branch_name
-      }</strong>
-        </h3>
-        <h4> Now You Can Start Tracking Your Order With This ID On Our HOme Page ${
-          findParcel.haveOwnTrackID ? findParcel.ownTrackID : findParcel._id
-        }</h4>
-        <br/>
-        <p style="font-family: Arial, sans-serif; font-size: 14px; color: #7f8c8d;">
-          For any queries, please contact the branch at: <strong>${
-            findBranch.branch_contact_number
-          }</strong>
-        </p>`,
-    });
-    res.status(200).json({
-      message: `Parcel Has Been Assigned To : ${findRiderGroup.groupname} By The Manager ${findManager.name}`,
+    return res.status(200).json({
+      parcel: {
+        ...findParcel.toObject(),
+        assignment: findAssignment,
+        ratelist: filteredRateList,
+      },
     });
   } catch (error) {
     console.log(error);
@@ -672,232 +829,84 @@ const HandleAssignParcels = async (req, res) => {
   }
 };
 
-const HandleGetParcels = async (req, res) => {
-  // try {
-  //   const { id } = req.params;
-  //   const findUser =
-  //     (await ManagerSchema.findById(id)) ||
-  //     (await AdminSchema.findById(id)) ||
-  //     (await SuperAdmin.findById(id));
-  //   if (!findUser) {
-  //     return res.status(404).json({ message: "User not found!" });
-  //   }
-  //   if (findUser.role.includes("Manager")) {
-  //     const findManager = await ManagerSchema.findOne({ _id: id });
-  //     if (!findManager) {
-  //       return res.status(404).json({ message: "Manager Not Found" });
-  //     }
-  //     const findBranch = await BranchSchema.findOne({
-  //       _id: findManager.branchID,
-  //     });
-  //     if (!findBranch) {
-  //       return res.status(404).json({ message: "Branch Not Found" });
-  //     }
-  //     const findParcels = await parcelSchema.find({ branchID: findBranch._id });
-  //     const includeRatelist = findParcels.map(async (item) => {
-  //       const findRateList = await ratelist.findOne({
-  //         "rateList._id": item.rateListID,
-  //       });
-  //       const filteredRateList = findRateList.rateList.filter(
-  //         (rateID) => rateID._id.toString() === item.rateListID.toString()
-  //       );
-  //       const findAssignment = await Assignment.findOne({
-  //         parcelID: item._id,
-  //       }).populate({
-  //         path: "customerID",
-  //         model: "users",
-  //         select: "_id name email phone",
-  //       });
-  //       return {
-  //         ...item.toObject(),
-  //         rateList: filteredRateList[0] || null,
-  //         assignment: findAssignment,
-  //       };
-  //     });
-  //     const resolved = await Promise.all(includeRatelist);
-  //     return res.status(200).json({ parcels: resolved });
-  //   } else if (findUser.role.includes("SuperAdmin")) {
-  //     const findParcels = await parcelSchema.find();
-  //     const includeRatelist = findParcels.map(async (item) => {
-  //       const findRateList = await ratelist.findOne({
-  //         "rateList._id": item.rateListID,
-  //       });
-  //       const filteredRateList = findRateList.rateList.filter(
-  //         (rateID) => rateID._id.toString() === item.rateListID.toString()
-  //       );
-  //       const findAssignment = await Assignment.findOne({ parcelID: item._id })
-  //         .populate({
-  //           path: "parcelID",
-  //           model: "parcel",
-  //           select:
-  //             "Status status _id ownTrackID parcelDescription rateListID reciverAddress SenderAddress CodCharges CodAmount haveOwnTrackID weight",
-  //         })
-  //         .populate({
-  //           path: "customerID",
-  //           model: "users",
-  //           select: "",
-  //         });
-  //       return {
-  //         ...item.toObject(),
-  //         rateList: filteredRateList[0],
-  //         assignment: findAssignment,
-  //       };
-  //     });
-  //     const resolved = await Promise.all(includeRatelist);
-  //     return res.status(200).json({ parcels: resolved });
-  //   } else if (findUser.role.includes("Admin")) {
-  //     const findBranch = await BranchSchema.find({ AdminsId: { $in: id } });
-  //     if (!findBranch || findBranch.length === 0) {
-  //       return res.status(404).json({ message: "Branch Not Found" });
-  //     }
-  //     const branchIDs = findBranch.map((branch) => branch._id);
-  //     const findParcels = await parcelSchema.find({
-  //       branchID: { $in: branchIDs },
-  //     });
-  //     const includeRatelist = findParcels.map(async (item) => {
-  //       const findRateList = await ratelist.findOne({
-  //         "rateList._id": item.rateListID,
-  //       });
-  //       const filteredRateList = findRateList
-  //         ? findRateList.rateList.filter(
-  //             (rateID) => rateID._id.toString() === item.rateListID.toString()
-  //           )
-  //         : [];
-  //       const findAssignment = await Assignment.findOne({ parcelID: item._id });
-  //       return {
-  //         ...item.toObject(),
-  //         rateList: filteredRateList[0] || null,
-  //         assignment: findAssignment || null,
-  //       };
-  //     });
-  //     const resolved = await Promise.all(includeRatelist);
-  //     return res.status(200).json({ parcels: resolved });
-  //   }
-  // } catch (error) {
-  //   console.log(error);
-  //   res.status(500).json({ message: "Internal Server Error!" });
-  // }
-};
-
-const HandleGetSingleParcels = async (req, res) => {
-  // try {
-  //   const { parcelID } = req.params;
-  //   const findParcel = await parcelSchema.findById(parcelID);
-  //   const findAssignment = await Assignment.findOne({ parcelID: parcelID })
-  //     .populate({
-  //       path: "parcelID",
-  //       model: "parcel",
-  //       select:
-  //         "Status _id ownTrackID parcelDescription rateListID reciverAddress SenderAddress hsCode",
-  //     })
-  //     .populate({
-  //       path: "customerID",
-  //       model: "users",
-  //       select: "_id name email phone",
-  //     });
-  //   if (!findParcel) {
-  //     return res.status(404).json({ message: "Parcel not found!" });
-  //   }
-  //   const findRateList = await ratelist.findOne({
-  //     "rateList._id": findParcel.rateListID,
-  //   });
-  //   const filteredRateList = findRateList.rateList.filter(
-  //     (rateID) => rateID._id.toString() === findParcel.rateListID.toString()
-  //   );
-  //   return res.status(200).json({
-  //     parcel: {
-  //       ...findParcel.toObject(),
-  //       assignment: findAssignment,
-  //       ratelist: filteredRateList,
-  //     },
-  //   });
-  //   //
-  // } catch (error) {
-  //   console.log(error);
-  //   res.status(500).json({ message: "Internal Server Error!" });
-  // }
-};
-
 const HandleTrackParcel = async (req, res) => {
-  // try {
-  //   const { userID, trackID } = req.params;
-  //   const findParcel = await parcelSchema.findOne({
-  //     $or: [{ _id: String(trackID) }, { String: Number(trackID) }],
-  //   });
-  //   const findAssignment = await Assignment.findOne({
-  //     parcelID: findParcel._id,
-  //   })
-  //     .populate({
-  //       path: "branchID",
-  //       model: "branches",
-  //     })
-  //     .populate({
-  //       path: "assignedFromManager",
-  //       model: "managers",
-  //     })
-  //     .populate({
-  //       path: "riderGroupID",
-  //       model: "ridersgroup",
-  //     })
-  //     .populate({
-  //       path: "customerID",
-  //       model: "users",
-  //     })
-  //     .populate({
-  //       path: "riderID",
-  //       model: "riders",
-  //     })
-  //     .populate({
-  //       path: "parcelID",
-  //       model: "parcel",
-  //     });
-  //   // if (!findAssignment) {
-  //   //   return res.status(404).json({ message: "Invalid Tracking ID" });
-  //   // }
-  //   return res
-  //     .status(200)
-  //     .json({ assignment: findAssignment, message: "Tracked Successfully" });
-  // } catch (error) {
-  //   console.log(error);
-  //   res.status(500).json({ message: "Internal Server Error!" });
-  // }
+  try {
+    const { userID, trackID } = req.params;
+    const findParcel = await parcelSchema.findOne({
+      $or: [{ _id: String(trackID) }, { String: Number(trackID) }],
+    });
+    const findAssignment = await Assignment.findOne({
+      parcelID: findParcel._id,
+    })
+      .populate({
+        path: "branchID",
+        model: "branches",
+      })
+      .populate({
+        path: "assignedFromManager",
+        model: "managers",
+      })
+      .populate({
+        path: "riderGroupID",
+        model: "ridersgroup",
+      })
+      .populate({
+        path: "customerID",
+        model: "users",
+      })
+      .populate({
+        path: "riderID",
+        model: "riders",
+      })
+      .populate({
+        path: "parcelID",
+        model: "parcel",
+      });
+
+    return res
+      .status(200)
+      .json({ assignment: findAssignment, message: "Tracked Successfully" });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Internal Server Error!" });
+  }
 };
 
 const HandleGetParcelsByGroupID = async (req, res) => {
-  // try {
-  //   const { riderGroupID } = req.params;
-  //   const assignments = await Assignment.find({
-  //     riderGroupID: riderGroupID,
-  //     Status: ["Shipment Sorted at Delivery Facility"],
-  //     riderID: null,
-  //   }).populate({
-  //     path: "parcelID",
-  //     model: "parcel",
-  //     select:
-  //       "Status status _id parcelDescription rateListID reciverAddress SenderAddress CodCharges CodAmount haveOwnTrackID ownTrackID weight",
-  //   });
-  //   const mapAssignment = assignments.map(async (item) => {
-  //     const findRateList = await ratelist.findOne({
-  //       "rateList._id": { $in: item.parcelID.rateListID },
-  //     });
-  //     const filteredRateList = findRateList
-  //       ? findRateList.rateList.filter(
-  //           (rate) =>
-  //             rate._id.toString() === item.parcelID.rateListID.toString()
-  //         )
-  //       : [];
-  //     return {
-  //       ...item.parcelID.toObject(),
-  //       rateList: filteredRateList[0] || null,
-  //       assignment: item,
-  //     };
-  //   });
-  //   const resolved = await Promise.all(mapAssignment);
-  //   res.status(200).json({ assignments: resolved });
-  // } catch (error) {
-  //   console.log(error);
-  //   res.status(500).json({ message: "Internal Server Error!" });
-  // }
+  try {
+    const { riderGroupID } = req.params;
+    const assignments = await Assignment.find({
+      riderGroupID: riderGroupID,
+      Status: ["Shipment Sorted at Delivery Facility"],
+      riderID: null,
+    }).populate({
+      path: "parcelID",
+      model: "parcel",
+      select:
+        "Status status _id parcelDescription rateListID reciverAddress SenderAddress CodCharges CodAmount haveOwnTrackID ownTrackID weight",
+    });
+    const mapAssignment = assignments.map(async (item) => {
+      const findRateList = await ratelist.findOne({
+        "rateList._id": { $in: item.parcelID.rateListID },
+      });
+      const filteredRateList = findRateList
+        ? findRateList.rateList.filter(
+            (rate) =>
+              rate._id.toString() === item.parcelID.rateListID.toString()
+          )
+        : [];
+      return {
+        ...item.parcelID.toObject(),
+        rateList: filteredRateList[0] || null,
+        assignment: item,
+      };
+    });
+    const resolved = await Promise.all(mapAssignment);
+    res.status(200).json({ assignments: resolved });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Internal Server Error!" });
+  }
 };
 
 export {

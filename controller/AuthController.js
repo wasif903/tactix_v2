@@ -491,7 +491,6 @@ const createUser = async (req, res) => {
               "Zip Code Range End is required and must be greater than 5 and less than 9",
           });
         }
-
         if (
           priceList.zipCodeRangeStart === "" ||
           !(
@@ -910,51 +909,133 @@ const HandleUpdateRole = async (req, res) => {
       findUser.password = req.body.password || findUser.password;
       findUser.phone = req.body.phone || findUser.phone;
 
-      if (Array.isArray(req?.body?.rateList)) {
-        const existingRateList = await ratelist.findOne({ userID: id });
-        if (!existingRateList) {
-          return res.status(404).json({ message: "Rate List not found!" });
-        }
+      if (!Array.isArray(req?.body?.rateList)) {
+        return res.status(400).json({ message: "Ratelist format is invalid" });
+      }
 
-        const mergedRateList = [...existingRateList.rateList];
+      const existingRateList = await ratelist.findOne({ userID: id });
+      if (!existingRateList) {
+        return res.status(404).json({ message: "Rate List not found!" });
+      }
 
-        req.body.rateList.forEach((item) => {
-          const fromLocation = item?.from?.trim()?.toLowerCase();
-          const toLocation = item?.to?.trim()?.toLowerCase();
+      const dataArray = [];
+      const invalidDataArray = [];
 
-          if (fromLocation === toLocation) {
-            return res
-              .status(400)
-              .json({ message: "From and To locations can't be the same" });
-          }
-
-          if (item?.price <= 0) {
-            return res
-              .status(400)
-              .json({ message: "Price can't be zero or negative" });
-          }
-
-          const exists = mergedRateList.some((rate) => {
-            const existingFrom = rate.from.trim().toLowerCase();
-            const existingTo = rate.to.trim().toLowerCase();
-
-            return (
-              existingFrom === fromLocation &&
-              existingTo === toLocation &&
-              rate.price === item.price &&
-              JSON.stringify(rate.shipmentType) ===
-                JSON.stringify(item.shipmentType)
-            );
+      req.body.rateList.map(async (item) => {
+        const hasAllRequiredFields =
+          item.countryName &&
+          item.city &&
+          item.state &&
+          item.zipCodeRangeStart &&
+          item.zipCodeRangeEnd &&
+          item.shipmentType &&
+          item.rates &&
+          item.weight &&
+          item.shipmentCategory &&
+          ["SpeedyShip", "SteadyShip", "Postal Economy", "CustomShip"].includes(
+            item.shipmentType
+          ) &&
+          ["Collection", "Mid-Mile", "Customs Clearance", "Delivery"].includes(
+            item.shipmentCategory
+          );
+        if (hasAllRequiredFields) {
+          const existingEntry = await ratelist.findOne({
+            "rateList.countryName": item.countryName,
+            "rateList.state": item.state,
+            "rateList.city": item.city,
+            "rateList.shipmentType": item.shipmentType,
+            "rateList.shipmentCategory": item.shipmentCategory,
           });
 
-          if (!exists) {
-            mergedRateList.push(item);
+          if (existingEntry) {
+            // Add to invalidDataArray if a duplicate is found
+            invalidDataArray.push({
+              ...item,
+              errors: [{ message: "Duplicate entry for this RateList." }],
+            });
+          } else {
+            const modifiedData = {
+              _id: new mongoose.Types.ObjectId(),
+              countryName: String(item.countryName),
+              city: String(item.city),
+              state: String(item.state),
+              zipCodeRangeStart: String(item.zipCodeRangeStart),
+              zipCodeRangeEnd: String(item.zipCodeRangeEnd),
+              shipmentType: String(item.shipmentType),
+              rates: Number(item.rates),
+              weight: Number(item.weight),
+              shipmentCategory: String(item.shipmentCategory),
+            };
+            dataArray.push(modifiedData);
           }
-        });
+        } else {
+          // Handle missing fields or invalid data
+          invalidDataArray.push({
+            ...item,
+            errors: [
+              {
+                message: !item.countryName
+                  ? "countryName field is required"
+                  : null,
+              },
+              { message: !item.city ? "city field is required" : null },
+              { message: !item.state ? "state field is required" : null },
+              {
+                message: !item.zipCodeRangeStart
+                  ? "zipCodeRangeStart field is required"
+                  : null,
+              },
+              {
+                message: !item.zipCodeRangeEnd
+                  ? "zipCodeRangeEnd field is required"
+                  : null,
+              },
+              {
+                message: !item.shipmentType
+                  ? "shipmentType field is required"
+                  : ![
+                      "SpeedyShip",
+                      "SteadyShip",
+                      "Postal Economy",
+                      "CustomShip",
+                    ].includes(item.shipmentType)
+                  ? "Invalid Shipment Type"
+                  : null,
+              },
+              {
+                message: !item.shipmentCategory
+                  ? "shipmentCategory field is required"
+                  : ![
+                      "Collection",
+                      "Mid-Mile",
+                      "Customs Clearance",
+                      "Delivery",
+                    ].includes(item.shipmentCategory)
+                  ? "Invalid shipmentCategory"
+                  : null,
+              },
+            ],
+          });
+        }
+      });
 
-        existingRateList.rateList = mergedRateList;
-        await existingRateList.save();
+      if (invalidDataArray.length > 0) {
+        return res
+          .status(200)
+          .json({ invalidData: invalidDataArray, validData: dataArray });
       }
+
+      const findRateList = await ratelist.findOne({ userID: findUser._id });
+      console.log(findRateList, "===================1");
+
+      const test = await ratelist.findOneAndUpdate(
+        { userID: findUser._id },
+        {
+          $set: { rateList: [...findRateList.toObject(), dataArray] },
+        }
+      );
+
+      console.log(test, "===================2");
 
       const profileImage = req?.files?.profileImage;
       const uploadResult = profileImage
@@ -967,9 +1048,12 @@ const HandleUpdateRole = async (req, res) => {
 
       await findUser.save();
 
-      return res
-        .status(200)
-        .json({ message: "Profile Updated Successfully!", user: findUser });
+      return res.status(200).json({
+        message: "Profile Updated Successfully!",
+        user: findUser,
+        invalidData: invalidDataArray,
+        validData: dataArray,
+      });
     } else {
       return res.status(400).json({ message: "Bad Request" });
     }
@@ -1204,7 +1288,6 @@ const HandleCreateBulkRateList = async (req, res) => {
           );
 
         if (hasAllRequiredFields) {
-        
           const modifiedData = {
             _id: new mongoose.Types.ObjectId(),
             countryName: String(rowData.countryName),
@@ -1218,7 +1301,6 @@ const HandleCreateBulkRateList = async (req, res) => {
             shipmentCategory: String(rowData.shipmentCategory),
           };
           dataArray.push(modifiedData);
-
         } else {
           // Handle missing fields or invalid data
           invalidDataArray.push({
