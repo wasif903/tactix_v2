@@ -132,14 +132,15 @@ const CreateParcel = async (req, res) => {
       netWeight = Number(weight);
     }
 
-    const extractId = findRateList.rateList.find((rate) => 
-      rate.shipmentType === filteredRateList[0].shipmentType &&
-      rate.shipmentCategory === filteredRateList[0].shipmentCategory &&
-      rate.countryName === filteredRateList[0].countryName &&
-      rate.state === filteredRateList[0].state &&
-      rate.city === filteredRateList[0].city &&
-      rate.weight >= volumetricWeight 
-    )
+    const extractId = findRateList.rateList.find(
+      (rate) =>
+        rate.shipmentType === filteredRateList[0].shipmentType &&
+        rate.shipmentCategory === filteredRateList[0].shipmentCategory &&
+        rate.countryName === filteredRateList[0].countryName &&
+        rate.state === filteredRateList[0].state &&
+        rate.city === filteredRateList[0].city &&
+        rate.weight >= volumetricWeight
+    );
 
     console.log(extractId);
 
@@ -256,7 +257,13 @@ const getParcelOfUser = async (req, res) => {
     if (!findUser) {
       return res.status(404).json({ message: "User not found!" });
     } else {
-      const findUserParcel = await parcelSchema.find({ userId: userId });
+      const findUserParcel = await parcelSchema
+        .find({ userId: userId })
+        .populate({
+          path: "userId",
+          model: "users",
+          select: "-password",
+        });
       const assignment = findUserParcel.map(async (item) => {
         const findAssignment = await Assignment.findOne({
           parcelID: item._id,
@@ -356,7 +363,7 @@ const HandleBulkUpload = async (req, res) => {
           rowData.CodCharges &&
           (rowData.CodAmount === "yes"
             ? rowData.CodCharges !== "null" && rowData.CodCharges !== "0"
-            : rowData.CodCharges === "null") &&
+            : rowData.CodAmount === "no" && rowData.CodCharges === "null") &&
           (rowData.dangerousGoods === "yes" ||
             rowData.dangerousGoods === "no") &&
           (!rowData.hsCode || (rowData.hsCode && rowData.hsCode.length === 7));
@@ -367,9 +374,9 @@ const HandleBulkUpload = async (req, res) => {
             userId: new mongoose.Types.ObjectId(userId),
             branchID: new mongoose.Types.ObjectId(branchID),
             parcelDescription: String(rowData.parcelDescription),
-            CodAmount: Boolean(rowData.CodAmount === "yes" ? true : false),
+            CodAmount: String(rowData.CodAmount === "yes" ? true : false),
             weight: Number(rowData.weight),
-            dangerousGoods: Boolean(
+            dangerousGoods: String(
               rowData.dangerousGoods === "yes" ? true : false
             ),
             Dimension: {
@@ -389,7 +396,7 @@ const HandleBulkUpload = async (req, res) => {
             SenderAddress: String(rowData.SenderAddress),
             SenderPostCode: Number(rowData.SenderPostCode),
             hsCode: Number(rowData.hsCode),
-            haveOwnTrackID: Boolean(
+            haveOwnTrackID: String(
               rowData.haveOwnTrackID === "yes" ? true : false
             ),
             ownTrackID:
@@ -401,66 +408,169 @@ const HandleBulkUpload = async (req, res) => {
           dataArray.push(modifiedData);
         } else {
           // Push invalid data to invalidDataArray for reporting
+     
           invalidDataArray.push({
             rowData,
-            missingFields: {
-              parcelDescription: !rowData.parcelDescription
-                ? "parcelDescription field is required"
-                : null,
-              CodAmount: !rowData.CodAmount
-                ? "CodAmount field is required"
-                : null,
-              codValidation:
-                rowData.CodAmount === "yes" &&
-                (!rowData.CodCharges !== "null" || rowData.CodCharges !== "0")
-                  ? "CodCharges cannot be null or 0 if CodAmount is 'yes'"
+            // missingFields: {
+            //   parcelDescription: !rowData.parcelDescription
+            //     ? "parcelDescription field is required"
+            //     : null,
+            //   CodAmount: !rowData.CodAmount
+            //     ? "CodAmount field is required"
+            //     : null,
+            //   codValidation:
+            //     rowData.CodAmount === "yes" &&
+            //     (!rowData.CodCharges !== "null" || rowData.CodCharges !== "0")
+            //       ? "CodCharges cannot be null or 0 if CodAmount is 'yes'"
+            //       : null,
+            //   weight: !rowData.weight ? "weight field is required" : null,
+            //   length: !rowData.length ? "length field is required" : null,
+            //   recieverPhone: !rowData.recieverPhone
+            //     ? "recieverPhone field is required"
+            //     : null,
+            //   receiverName: !rowData.receiverName
+            //     ? "receiverName field is required"
+            //     : null,
+            //   reciverAddress: !rowData.reciverAddress
+            //     ? "reciverAddress field is required"
+            //     : null,
+            //   ReciverPostCode: !rowData.ReciverPostCode
+            //     ? "ReciverPostCode field is required"
+            //     : null,
+            //   SenderPhone: !rowData.SenderPhone
+            //     ? "SenderPhone field is required"
+            //     : null,
+            //   SenderAddress: !rowData.SenderAddress
+            //     ? "SenderAddress field is required"
+            //     : null,
+            //   SenderPostCode: !rowData.SenderPostCode
+            //     ? "SenderPostCode field is required"
+            //     : null,
+            //   haveOwnTrackID: Boolean(
+            //     rowData.haveOwnTrackID === "yes" ? true : false
+            //   ),
+            //   ownTrackID:
+            //     rowData.haveOwnTrackID === "yes" &&
+            //     (rowData.ownTrackID !== "null" ||
+            //       rowData.ownTrackID.length !== 14)
+            //       ? "ownTrackID cannot be null or less than 14 digits"
+            //       : null,
+            //   CodCharges: !rowData.CodCharges
+            //     ? "CodCharges field is required"
+            //     : null,
+            //   hsCode:
+            //     rowData.hsCode && rowData.hsCode.length !== 7
+            //       ? "hsCode should be 7 digits long"
+            //       : null,
+            //   dangerousGoods:
+            //     !rowData.dangerousGoods ||
+            //     (rowData.dangerousGoods !== "yes" &&
+            //       rowData.dangerousGoods !== "no")
+            //       ? 'dangerousGoods must be "yes" or "no"'
+            //       : null,
+            // },
+
+            errors: [
+              {
+                message: !rowData.parcelDescription
+                  ? "parcelDescription field is required"
                   : null,
-              weight: !rowData.weight ? "weight field is required" : null,
-              length: !rowData.length ? "length field is required" : null,
-              recieverPhone: !rowData.recieverPhone
-                ? "recieverPhone field is required"
-                : null,
-              receiverName: !rowData.receiverName
-                ? "receiverName field is required"
-                : null,
-              reciverAddress: !rowData.reciverAddress
-                ? "reciverAddress field is required"
-                : null,
-              ReciverPostCode: !rowData.ReciverPostCode
-                ? "ReciverPostCode field is required"
-                : null,
-              SenderPhone: !rowData.SenderPhone
-                ? "SenderPhone field is required"
-                : null,
-              SenderAddress: !rowData.SenderAddress
-                ? "SenderAddress field is required"
-                : null,
-              SenderPostCode: !rowData.SenderPostCode
-                ? "SenderPostCode field is required"
-                : null,
-              haveOwnTrackID: Boolean(
-                rowData.haveOwnTrackID === "yes" ? true : false
-              ),
-              ownTrackID:
-                rowData.haveOwnTrackID === "yes" &&
-                (rowData.ownTrackID !== "null" ||
-                  rowData.ownTrackID.length !== 14)
-                  ? "ownTrackID cannot be null or less than 14 digits"
+              },
+              {
+                message: !rowData.CodAmount
+                  ? "CodAmount field is required"
                   : null,
-              CodCharges: !rowData.CodCharges
-                ? "CodCharges field is required"
-                : null,
-              hsCode:
-                rowData.hsCode && rowData.hsCode.length !== 7
-                  ? "hsCode should be 7 digits long"
+              },
+              {
+                message:
+                  rowData.CodAmount === "yes" &&
+                  (rowData.CodCharges === "null" || rowData.CodCharges === "0")
+                    ? "CodCharges cannot be 'null' or 0 if CodAmount is 'yes'"
+                    : rowData.CodAmount === "no" &&
+                      rowData.CodCharges !== "null"
+                    ? "CodCharges should be 'null' if CodAmount is 'no'"
+                    : null,
+              },
+              {
+                message: !rowData.weight ? "weight field is required" : null,
+              },
+              {
+                message: !rowData.height ? "height field is required" : null,
+              },
+              {
+                message: !rowData.length ? "length field is required" : null,
+              },
+              {
+                message: !rowData.recieverPhone
+                  ? "recieverPhone field is required"
                   : null,
-              dangerousGoods:
-                !rowData.dangerousGoods ||
-                (rowData.dangerousGoods !== "yes" &&
-                  rowData.dangerousGoods !== "no")
-                  ? 'dangerousGoods must be "yes" or "no"'
+              },
+              {
+                message: !rowData.receiverName
+                  ? "receiverName field is required"
                   : null,
-            },
+              },
+              {
+                message: !rowData.reciverAddress
+                  ? "reciverAddress field is required"
+                  : null,
+              },
+              {
+                message: !rowData.ReciverPostCode
+                  ? "ReciverPostCode field is required"
+                  : null,
+              },
+              {
+                message: !rowData.SenderPhone
+                  ? "SenderPhone field is required"
+                  : null,
+              },
+              {
+                message: !rowData.SenderAddress
+                  ? "SenderAddress field is required"
+                  : null,
+              },
+              {
+                message: !rowData.SenderAddress
+                  ? "SenderAddress field is required"
+                  : null,
+              },
+              {
+                message: !rowData.SenderPostCode
+                  ? "SenderPostCode field is required"
+                  : null,
+              },
+              {
+                message: rowData.haveOwnTrackID === "yes" ? true : null,
+              },
+              {
+                message:
+                  rowData.haveOwnTrackID === "yes" &&
+                  (rowData.ownTrackID === "null" ||
+                    rowData.ownTrackID.length !== 14)
+                    ? "ownTrackID cannot be null or less than 14 digits"
+                    : null,
+              },
+              {
+                message: !rowData.CodCharges
+                  ? "CodCharges field is required"
+                  : null,
+              },
+              {
+                message:
+                  rowData.hsCode && rowData.hsCode.length !== 7
+                    ? "hsCode should be 7 digits long"
+                    : null,
+              },
+              {
+                message:
+                  !rowData.dangerousGoods ||
+                  (rowData.dangerousGoods !== "yes" &&
+                    rowData.dangerousGoods !== "no")
+                    ? 'dangerousGoods must be "yes" or "no"'
+                    : null,
+              },
+            ],
           });
         }
       })
@@ -582,102 +692,93 @@ const HandleBulkParcelCreate = async (req, res) => {
 };
 
 const HandleAssignParcels = async (req, res) => {
-  // try {
-  //   const { branchID, riderGroupID } = req.params;
-  //   const { assignedFromManager, customerID, parcelID } = req.body;
-  //   const findBranch = await BranchSchema.findById(branchID);
-  //   if (!findBranch) {
-  //     return res.status(404).json({ message: "Branch not found!" });
-  //   }
-  //   const findRiderGroup = await RidersGroupSchema.findById(riderGroupID);
-  //   if (!findRiderGroup) {
-  //     return res.status(404).json({ message: "Driver Crew not found!" });
-  //   }
-  //   const findDrivers = await RiderSchema.find({
-  //     RiderGroup: findRiderGroup._id,
-  //   });
-  //   if (findDrivers.length === 0) {
-  //     return res.status(400).json({ message: "No drivers available!" });
-  //   }
-  //   const findManager = await ManagerSchema.findById(assignedFromManager);
-  //   if (!findManager) {
-  //     return res.status(404).json({ message: "Manager not found!" });
-  //   }
-  //   const findUser = await UserSchema.findById(customerID);
-  //   if (!findUser) {
-  //     return res.status(404).json({ message: "User not found!" });
-  //   }
-  //   const findParcel = await parcelSchema.findById(parcelID);
-  //   const findRateList = await ratelist.findOne({
-  //     "rateList._id": findParcel.rateListID,
-  //   });
-  //   const filteredRateList = findRateList.rateList.filter(
-  //     (rateID) => rateID._id.toString() === findParcel.rateListID.toString()
-  //   );
-  //   const volumetricWeight =
-  //     (Number(findParcel.Dimension.length) *
-  //       Number(findParcel.Dimension.width) *
-  //       Number(findParcel.Dimension.height)) /
-  //     5000;
-  //   // let originRate;
-  //   // let totalAmount;
-  //   // if (volumetricWeight < filteredRateList[0].weight) {
-  //   // }
-  //   const data = {
-  //     ...findParcel.toObject(),
-  //     rateList: !findParcel.CodAmount
-  //       ? Number(filteredRateList[0].rates * findParcel.weight)
-  //       : Number(
-  //           filteredRateList[0].price * findParcel.weight +
-  //             findParcel.CodCharges
-  //         ),
-  //   };
-  //   if (!findParcel) {
-  //     return res.status(404).json({ message: "Parcel not found!" });
-  //   }
-  //   const createAssignment = new Assignment({
-  //     branchID,
-  //     riderGroupID,
-  //     customerID,
-  //     assignedFromManager,
-  //     parcelID,
-  //     totalPrice: data.rateList,
-  //   });
-  //   await createAssignment.save();
-  //   await parcelSchema.findByIdAndUpdate(
-  //     parcelID,
-  //     { $set: { status: "Order Received" } },
-  //     { new: true }
-  //   );
-  //   autoMailer({
-  //     from: "admin@tactix.asia",
-  //     to: `${findUser.email}`,
-  //     subject: "Welcome to our platform, TACTIX",
-  //     message: `
-  //       <h3 style="font-family: Arial, sans-serif; color: #34495e;">
-  //         Your Order Has Been Received Successfully <strong>${
-  //           findManager.name
-  //         }</strong> and is linked to the branch: <strong>${
-  //       findBranch.branch_name
-  //     }</strong>
-  //       </h3>
-  //       <h4> Now You Can Start Tracking Your Order With This ID On Our HOme Page ${
-  //         findParcel.haveOwnTrackID ? findParcel.ownTrackID : findParcel._id
-  //       }</h4>
-  //       <br/>
-  //       <p style="font-family: Arial, sans-serif; font-size: 14px; color: #7f8c8d;">
-  //         For any queries, please contact the branch at: <strong>${
-  //           findBranch.branch_contact_number
-  //         }</strong>
-  //       </p>`,
-  //   });
-  //   res.status(200).json({
-  //     message: `Parcel Has Been Assigned To : ${findRiderGroup.groupname} By The Manager ${findManager.name}`,
-  //   });
-  // } catch (error) {
-  //   console.log(error);
-  //   res.status(500).json({ message: "Internal Server Error!" });
-  // }
+  try {
+    const { branchID, riderGroupID } = req.params;
+    const { assignedFromManager, customerID, parcelID } = req.body;
+    const findBranch = await BranchSchema.findById(branchID);
+    if (!findBranch) {
+      return res.status(404).json({ message: "Branch not found!" });
+    }
+    const findRiderGroup = await RidersGroupSchema.findById(riderGroupID);
+    if (!findRiderGroup) {
+      return res.status(404).json({ message: "Driver Crew not found!" });
+    }
+    const findDrivers = await RiderSchema.find({
+      RiderGroup: findRiderGroup._id,
+    });
+    if (findDrivers.length === 0) {
+      return res.status(400).json({ message: "No drivers available!" });
+    }
+    const findManager = await ManagerSchema.findById(assignedFromManager);
+    if (!findManager) {
+      return res.status(404).json({ message: "Manager not found!" });
+    }
+    const findUser = await UserSchema.findById(customerID);
+    if (!findUser) {
+      return res.status(404).json({ message: "User not found!" });
+    }
+    const findParcel = await parcelSchema.findById(parcelID);
+    const findRateList = await ratelist.findOne({
+      "rateList._id": findParcel.rateListID,
+    });
+    const filteredRateList = findRateList.rateList.filter(
+      (rateID) => rateID._id.toString() === findParcel.rateListID.toString()
+    );
+    const data = {
+      ...findParcel.toObject(),
+      rateList: !findParcel.CodAmount
+        ? Number(filteredRateList[0].rates * findParcel.weight)
+        : Number(
+            filteredRateList[0].rates * findParcel.weight +
+              findParcel.CodCharges
+          ),
+    };
+    if (!findParcel) {
+      return res.status(404).json({ message: "Parcel not found!" });
+    }
+    const createAssignment = new Assignment({
+      branchID,
+      riderGroupID,
+      customerID,
+      assignedFromManager,
+      parcelID,
+      totalPrice: data.rateList,
+    });
+    await createAssignment.save();
+    await parcelSchema.findByIdAndUpdate(
+      parcelID,
+      { $set: { status: "Order Received" } },
+      { new: true }
+    );
+    autoMailer({
+      from: "admin@tactix.asia",
+      to: `${findUser.email}`,
+      subject: "Welcome to our platform, TACTIX",
+      message: `
+        <h3 style="font-family: Arial, sans-serif; color: #34495e;">
+          Your Order Has Been Received Successfully <strong>${
+            findManager.name
+          }</strong> and is linked to the branch: <strong>${
+        findBranch.branch_name
+      }</strong>
+        </h3>
+        <h4> Now You Can Start Tracking Your Order With This ID On Our HOme Page ${
+          findParcel.haveOwnTrackID ? findParcel.ownTrackID : findParcel._id
+        }</h4>
+        <br/>
+        <p style="font-family: Arial, sans-serif; font-size: 14px; color: #7f8c8d;">
+          For any queries, please contact the branch at: <strong>${
+            findBranch.branch_contact_number
+          }</strong>
+        </p>`,
+    });
+    res.status(200).json({
+      message: `Parcel Has Been Assigned To : ${findRiderGroup.groupname} By The Manager ${findManager.name}`,
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Internal Server Error!" });
+  }
 };
 
 const HandleGetParcels = async (req, res) => {
@@ -686,6 +787,7 @@ const HandleGetParcels = async (req, res) => {
     const findUser =
       (await ManagerSchema.findById(id)) ||
       (await AdminSchema.findById(id)) ||
+      (await UserSchema.findById(id)) ||
       (await SuperAdmin.findById(id));
     if (!findUser) {
       return res.status(404).json({ message: "User not found!" });
@@ -701,14 +803,17 @@ const HandleGetParcels = async (req, res) => {
       if (!findBranch) {
         return res.status(404).json({ message: "Branch Not Found" });
       }
-      const findParcels = await parcelSchema.find({ branchID: findBranch._id });
+      const findParcels = await parcelSchema
+        .find({ branchID: findBranch._id })
+        .populate({
+          path: "userId",
+          model: "users",
+          select: "-password",
+        });
       const includeRatelist = findParcels.map(async (item) => {
         const findRateList = await ratelist.findOne({
           "rateList._id": item.rateListID,
         });
-
-        console.log(item.rateListID);
-        console.log(findRateList);
 
         const filteredRateList = findRateList.rateList.filter(
           (rateID) => rateID._id.toString() === item.rateListID.toString()
@@ -729,7 +834,11 @@ const HandleGetParcels = async (req, res) => {
       const resolved = await Promise.all(includeRatelist);
       return res.status(200).json({ parcels: resolved });
     } else if (findUser.role.includes("SuperAdmin")) {
-      const findParcels = await parcelSchema.find();
+      const findParcels = await parcelSchema.find().populate({
+        path: "userId",
+        model: "users",
+        select: "-password",
+      });
       const includeRatelist = findParcels.map(async (item) => {
         const findRateList = await ratelist.findOne({
           "rateList._id": item.rateListID,
@@ -756,6 +865,7 @@ const HandleGetParcels = async (req, res) => {
         };
       });
       const resolved = await Promise.all(includeRatelist);
+      console.log(resolved);
       return res.status(200).json({ parcels: resolved });
     } else if (findUser.role.includes("Admin")) {
       const findBranch = await BranchSchema.find({ AdminsId: { $in: id } });
@@ -763,9 +873,15 @@ const HandleGetParcels = async (req, res) => {
         return res.status(404).json({ message: "Branch Not Found" });
       }
       const branchIDs = findBranch.map((branch) => branch._id);
-      const findParcels = await parcelSchema.find({
-        branchID: { $in: branchIDs },
-      });
+      const findParcels = await parcelSchema
+        .find({
+          branchID: { $in: branchIDs },
+        })
+        .populate({
+          path: "userId",
+          model: "users",
+          select: "-password",
+        });
       const includeRatelist = findParcels.map(async (item) => {
         const findRateList = await ratelist.findOne({
           "rateList._id": item.rateListID,
@@ -879,12 +995,23 @@ const HandleGetParcelsByGroupID = async (req, res) => {
       riderGroupID: riderGroupID,
       Status: ["Shipment Sorted at Delivery Facility"],
       riderID: null,
-    }).populate({
-      path: "parcelID",
-      model: "parcel",
-      select:
-        "Status status _id parcelDescription rateListID reciverAddress SenderAddress CodCharges CodAmount haveOwnTrackID ownTrackID weight",
-    });
+    })
+      .populate({
+        path: "parcelID",
+        model: "parcel",
+        select:
+          "Status status _id parcelDescription rateListID reciverAddress SenderAddress CodCharges CodAmount haveOwnTrackID ownTrackID weight",
+      })
+      .populate({
+        path: "branchID",
+        model: "branches",
+        select: "branch_name ",
+      })
+      .populate({
+        path: "assignedFromManager",
+        model: "managers",
+        select: "_id name",
+      });
     const mapAssignment = assignments.map(async (item) => {
       const findRateList = await ratelist.findOne({
         "rateList._id": { $in: item.parcelID.rateListID },
