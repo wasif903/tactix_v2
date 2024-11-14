@@ -73,6 +73,11 @@ const CreateParcel = async (req, res) => {
         message: "Please Enter Track ID or Unselect the haveOwnTrackID Option",
       });
     }
+    if (haveOwnTrackID === true && ownTrackID.length !== 14) {
+      return res.status(400).json({
+        message: "Track ID must be 14 char long",
+      });
+    }
 
     const validateTrackID = await parcelSchema.findOne({
       ownTrackID: ownTrackID,
@@ -300,6 +305,7 @@ const getParcelOfUser = async (req, res) => {
   }
 };
 
+
 const HandleBulkUpload = async (req, res) => {
   try {
     const { userId, branchID } = req.params;
@@ -374,9 +380,9 @@ const HandleBulkUpload = async (req, res) => {
             userId: new mongoose.Types.ObjectId(userId),
             branchID: new mongoose.Types.ObjectId(branchID),
             parcelDescription: String(rowData.parcelDescription),
-            CodAmount: String(rowData.CodAmount === "yes" ? true : false),
+            CodAmount: Boolean(rowData.CodAmount === "yes" ? true : false),
             weight: Number(rowData.weight),
-            dangerousGoods: String(
+            dangerousGoods: Boolean(
               rowData.dangerousGoods === "yes" ? true : false
             ),
             Dimension: {
@@ -396,7 +402,7 @@ const HandleBulkUpload = async (req, res) => {
             SenderAddress: String(rowData.SenderAddress),
             SenderPostCode: Number(rowData.SenderPostCode),
             hsCode: Number(rowData.hsCode),
-            haveOwnTrackID: String(
+            haveOwnTrackID: Boolean(
               rowData.haveOwnTrackID === "yes" ? true : false
             ),
             ownTrackID:
@@ -408,111 +414,139 @@ const HandleBulkUpload = async (req, res) => {
           dataArray.push(modifiedData);
         } else {
           // Push invalid data to invalidDataArray for reporting
-     
-          invalidDataArray.push({
-            rowData,
-            errors: [
-              {
-                message: !rowData.parcelDescription
-                  ? "parcelDescription field is required"
+
+          invalidDataArray.push(
+            {
+              ...rowData,
+              message: !rowData.parcelDescription
+                ? "parcelDescription field is required"
+                : null,
+            },
+            {
+              ...rowData,
+
+              message: !rowData.CodAmount
+                ? "CodAmount field is required"
+                : null,
+            },
+            {
+              ...rowData,
+              message:
+                rowData.CodAmount === "yes" &&
+                (rowData.CodCharges === "null" || rowData.CodCharges === "0")
+                  ? "CodCharges cannot be 'null' or 0 if CodAmount is 'yes'"
+                  : rowData.CodAmount === "no" && rowData.CodCharges !== "null"
+                  ? "CodCharges should be 'null' if CodAmount is 'no'"
                   : null,
-              },
-              {
-                message: !rowData.CodAmount
-                  ? "CodAmount field is required"
+            },
+            {
+              ...rowData,
+
+              message: !rowData.weight ? "weight field is required" : null,
+            },
+            {
+              ...rowData,
+
+              message: !rowData.height ? "height field is required" : null,
+            },
+            {
+              ...rowData,
+
+              message: !rowData.length ? "length field is required" : null,
+            },
+            {
+              ...rowData,
+
+              message: !rowData.recieverPhone
+                ? "recieverPhone field is required"
+                : null,
+            },
+            {
+              ...rowData,
+
+              message: !rowData.receiverName
+                ? "receiverName field is required"
+                : null,
+            },
+            {
+              ...rowData,
+
+              message: !rowData.reciverAddress
+                ? "reciverAddress field is required"
+                : null,
+            },
+            {
+              ...rowData,
+
+              message: !rowData.ReciverPostCode
+                ? "ReciverPostCode field is required"
+                : null,
+            },
+            {
+              ...rowData,
+
+              message: !rowData.SenderPhone
+                ? "SenderPhone field is required"
+                : null,
+            },
+            {
+              ...rowData,
+
+              message: !rowData.SenderAddress
+                ? "SenderAddress field is required"
+                : null,
+            },
+            {
+              ...rowData,
+
+              message: !rowData.SenderAddress
+                ? "SenderAddress field is required"
+                : null,
+            },
+            {
+              ...rowData,
+
+              message: !rowData.SenderPostCode
+                ? "SenderPostCode field is required"
+                : null,
+            },
+          
+            {
+              ...rowData,
+
+              message:
+                rowData.haveOwnTrackID === "yes" &&
+                (rowData.ownTrackID === "null" ||
+                  rowData.ownTrackID.length !== 14)
+                  ? "ownTrackID cannot be null or less than 14 digits"
                   : null,
-              },
-              {
-                message:
-                  rowData.CodAmount === "yes" &&
-                  (rowData.CodCharges === "null" || rowData.CodCharges === "0")
-                    ? "CodCharges cannot be 'null' or 0 if CodAmount is 'yes'"
-                    : rowData.CodAmount === "no" &&
-                      rowData.CodCharges !== "null"
-                    ? "CodCharges should be 'null' if CodAmount is 'no'"
-                    : null,
-              },
-              {
-                message: !rowData.weight ? "weight field is required" : null,
-              },
-              {
-                message: !rowData.height ? "height field is required" : null,
-              },
-              {
-                message: !rowData.length ? "length field is required" : null,
-              },
-              {
-                message: !rowData.recieverPhone
-                  ? "recieverPhone field is required"
+            },
+            {
+              ...rowData,
+
+              message: !rowData.CodCharges
+                ? "CodCharges field is required"
+                : null,
+            },
+            {
+              ...rowData,
+
+              message:
+                rowData.hsCode && rowData.hsCode.length !== 7
+                  ? "hsCode should be 7 digits long"
                   : null,
-              },
-              {
-                message: !rowData.receiverName
-                  ? "receiverName field is required"
+            },
+            {
+              ...rowData,
+
+              message:
+                !rowData.dangerousGoods ||
+                (rowData.dangerousGoods !== "yes" &&
+                  rowData.dangerousGoods !== "no")
+                  ? 'dangerousGoods must be "yes" or "no"'
                   : null,
-              },
-              {
-                message: !rowData.reciverAddress
-                  ? "reciverAddress field is required"
-                  : null,
-              },
-              {
-                message: !rowData.ReciverPostCode
-                  ? "ReciverPostCode field is required"
-                  : null,
-              },
-              {
-                message: !rowData.SenderPhone
-                  ? "SenderPhone field is required"
-                  : null,
-              },
-              {
-                message: !rowData.SenderAddress
-                  ? "SenderAddress field is required"
-                  : null,
-              },
-              {
-                message: !rowData.SenderAddress
-                  ? "SenderAddress field is required"
-                  : null,
-              },
-              {
-                message: !rowData.SenderPostCode
-                  ? "SenderPostCode field is required"
-                  : null,
-              },
-              {
-                message: rowData.haveOwnTrackID === "yes" ? true : null,
-              },
-              {
-                message:
-                  rowData.haveOwnTrackID === "yes" &&
-                  (rowData.ownTrackID === "null" ||
-                    rowData.ownTrackID.length !== 14)
-                    ? "ownTrackID cannot be null or less than 14 digits"
-                    : null,
-              },
-              {
-                message: !rowData.CodCharges
-                  ? "CodCharges field is required"
-                  : null,
-              },
-              {
-                message:
-                  rowData.hsCode && rowData.hsCode.length !== 7
-                    ? "hsCode should be 7 digits long"
-                    : null,
-              },
-              {
-                message:
-                  !rowData.dangerousGoods ||
-                  (rowData.dangerousGoods !== "yes" &&
-                    rowData.dangerousGoods !== "no")
-                    ? 'dangerousGoods must be "yes" or "no"'
-                    : null,
-              },
-            ],
-          });
+            }
+          );
         }
       })
       .on("end", async function () {
@@ -520,7 +554,10 @@ const HandleBulkUpload = async (req, res) => {
         res.status(200).json({
           message: "Upload processed",
           validData: dataArray,
-          invalidData: invalidDataArray.length > 0 ? invalidDataArray : null,
+          invalidData:
+            invalidDataArray.length > 0
+              ? invalidDataArray.filter((item) => item.message !== null)
+              : null,
           rateList: findRateList,
         });
       });
